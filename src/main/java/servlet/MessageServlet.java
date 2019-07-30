@@ -16,7 +16,7 @@
  *  limitations under the License.
  */
 
-package org.openshift.quickstarts.undertow.servlet;
+package servlet;
 
 import java.io.IOException;
 import java.io.PrintWriter;
