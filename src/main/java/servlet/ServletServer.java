@@ -18,94 +18,62 @@
 
 package servlet;
 
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
+import java.io.IOException;
+import java.util.List;
 
-import io.undertow.Handlers;
-import io.undertow.Undertow;
-import io.undertow.server.HttpHandler;
-import io.undertow.server.handlers.PathHandler;
-import io.undertow.servlet.api.DeploymentInfo;
-import io.undertow.servlet.api.DeploymentManager;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.http.HttpOutputMessage;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.HttpMessageNotWritableException;
+import org.springframework.web.servlet.config.annotation.ContentNegotiationConfigurer;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurationSupport;
 
-import static io.undertow.servlet.Servlets.defaultContainer;
-import static io.undertow.servlet.Servlets.deployment;
-import static io.undertow.servlet.Servlets.servlet;
+import com.alibaba.fastjson.support.config.FastJsonConfig;
+import com.alibaba.fastjson.support.spring.FastJsonHttpMessageConverter;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.security.KeyStore;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Stuart Douglas
  */
-public class ServletServer {
-
-    public static final String MYAPP = "/";
+@SpringBootApplication
+@Slf4j
+public class ServletServer extends WebMvcConfigurationSupport {
 
     public static void main(final String[] args) {
-        try {
-
-            DeploymentInfo servletBuilder = deployment()
-                    .setClassLoader(ServletServer.class.getClassLoader())
-                    .setContextPath(MYAPP)
-                    .setDeploymentName("test.war")
-                    .addServlets(
-                            servlet("MessageServlet", MessageServlet.class)
-                                    .addInitParam("message", "OMG!!!!!!")
-                                    .addMapping("/*"),
-                            servlet("MyServlet", MessageServlet.class)
-                                    .addInitParam("message", "MyServlet")
-                                    .addMapping("/myservlet"));
-
-            DeploymentManager manager = defaultContainer().addDeployment(servletBuilder);
-            manager.deploy();
-
-            SSLContext sslContext = null;
-            String filename = System.getenv("HTTPS_KEYSTORE");
-            if (filename != null) {
-                String directory = System.getenv("HTTPS_KEYSTORE_DIR");
-                char[] password = System.getenv("HTTPS_PASSWORD").toCharArray();
-                File keystore = new File(directory, filename);
-            
-                sslContext = createSSLContext(loadKeyStore(keystore, password), password);
-            }
-            
-            HttpHandler servletHandler = manager.start();
-            PathHandler path = Handlers.path(Handlers.redirect(MYAPP))
-                    .addPrefixPath(MYAPP, servletHandler);
-            Undertow server = Undertow.builder()
-                    .addHttpListener(8080, "0.0.0.0")
-                    .addHttpsListener(8443, "0.0.0.0", sslContext)
-                    .setHandler(path)
-                    .build();
-            server.start();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+    	log.info("Server path:" + System.getProperty("user.dir"));
+		log.info("maxMemory：" + Runtime.getRuntime().maxMemory());
+		log.info("totalMemory：" + Runtime.getRuntime().totalMemory());
+		log.info("freeMemory：" + Runtime.getRuntime().freeMemory());	
+    	IndexController.setProName("ServletServer");
+    	SpringApplication.run(ServletServer.class, args);
     }
     
-    private static KeyStore loadKeyStore(File file, char[] password) throws Exception {
-        final InputStream stream = new FileInputStream(file);
-        try(InputStream is = stream) {
-            KeyStore loadedKeystore = KeyStore.getInstance("JKS");
-            loadedKeystore.load(is, password);
-            return loadedKeystore;
-        }
+    @Override
+    public void configureContentNegotiation(ContentNegotiationConfigurer configurer) {
+        configurer.favorPathExtension(false);
     }
-
-    private static SSLContext createSSLContext(final KeyStore keyStore, final char[] password) throws Exception {
-        KeyManager[] keyManagers;
-        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-        keyManagerFactory.init(keyStore, password);
-        keyManagers = keyManagerFactory.getKeyManagers();
-
-        SSLContext sslContext;
-        sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(keyManagers, null, null);
-
-        return sslContext;
+    
+    @Override
+    public void configureMessageConverters(List<HttpMessageConverter<?>> converters) {
+        //定义一个转换消息的对象
+        FastJsonHttpMessageConverter fastConverter = new FastJsonHttpMessageConverter() {
+            @Override
+            protected void writeInternal(Object obj, HttpOutputMessage outputMessage) throws IOException, HttpMessageNotWritableException {
+                if(obj != null && obj.getClass()==String.class) {
+                    outputMessage.getBody().write(obj.toString().getBytes());
+                }else {
+                    super.writeInternal(obj, outputMessage);
+                }
+            }
+        };
+        //添加fastjson的配置信息 比如 ：是否要格式化返回的json数据
+        FastJsonConfig fastJsonConfig = new FastJsonConfig();
+//        fastJsonConfig.setSerializerFeatures(SerializerFeature.PrettyFormat);
+        //在转换器中添加配置信息
+        fastConverter.setFastJsonConfig(fastJsonConfig);
+        //将转换器添加到converters中
+        converters.add(fastConverter);
     }
 }
