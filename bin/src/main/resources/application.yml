@@ -1,0 +1,6 @@
+logging:
+    config: classpath:logback/logback.xml
+    
+server:
+    tomcat:
+        max-threads: 800
